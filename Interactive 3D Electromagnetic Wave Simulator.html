@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive 3D EM Wave Simulator</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #050505;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: #fff;
+        user-select: none;
+      }
+      #canvas-container {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      /* 玻璃拟态基础样式 */
+      .glass-panel {
+        position: absolute;
+        background: rgba(15, 15, 20, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        pointer-events: auto;
+      }
+
+      /* 左下角控制台 */
+      #ui-panel {
+        bottom: 20px;
+        left: 20px;
+        padding: 20px;
+        min-width: 310px;
+      }
+      .control-group {
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .control-group:last-child {
+        margin-bottom: 0;
+      }
+      label {
+        font-size: 13px;
+        color: #bbb;
+      }
+      input[type="range"] {
+        width: 140px;
+        cursor: pointer;
+      }
+      .value-display {
+        font-size: 13px;
+        font-family: monospace;
+        color: #00ffff;
+        width: 35px;
+        text-align: right;
+      }
+
+      button {
+        background: rgba(255, 255, 255, 0.1);
+        color: #eee;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      button.active {
+        background: #0078d7;
+        border-color: #00a8ff;
+        color: #fff;
+        box-shadow: 0 0 10px rgba(0, 120, 215, 0.5);
+      }
+      button.action-btn {
+        font-weight: bold;
+        width: 100%;
+      }
+
+      /* 左上角图例 */
+      #legend-panel {
+        top: 20px;
+        left: 20px;
+        padding: 15px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .color-box {
+        width: 16px;
+        height: 4px;
+        margin-right: 12px;
+        border-radius: 2px;
+      }
+      .color-e {
+        background: #00ffff;
+        box-shadow: 0 0 8px #00ffff;
+      }
+      .color-b {
+        background: #ff00ff;
+        box-shadow: 0 0 8px #ff00ff;
+      }
+      .color-p {
+        border-radius: 50%;
+        height: 10px;
+        width: 10px;
+        margin-right: 15px;
+        margin-left: 3px;
+      }
+
+      /* 右上角物理公式面板 */
+      #formula-panel {
+        top: 20px;
+        right: 20px;
+        padding: 20px;
+        max-width: 280px;
+      }
+      .panel-title {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #fff;
+        border-bottom: 1px solid #444;
+        padding-bottom: 5px;
+      }
+      .formula-block {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        font-family: "Cambria Math", "Times New Roman", serif;
+        font-size: 16px;
+        letter-spacing: 1px;
+      }
+      .math-symbol {
+        color: #ffcc00;
+        font-style: italic;
+      }
+      .math-text {
+        font-size: 12px;
+        color: #aaa;
+        margin-top: 8px;
+        line-height: 1.5;
+        font-family: sans-serif;
+      }
+
+      #dynamic-formula {
+        color: #00ffff;
+        font-family: monospace;
+        font-size: 13px;
+        margin-top: 10px;
+      }
+
+      /* 新增输入框样式 */
+      .num-input {
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: 1px solid #555;
+        border-radius: 4px;
+        padding: 4px;
+        width: 45px;
+        text-align: center;
+      }
+
+      .flex-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .flex-row > button {
+        flex: 1;
+        margin-top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+
+    <div id="legend-panel" class="glass-panel">
+      <div class="legend-item">
+        <div
+          class="color-p"
+          style="background: #ffffff; box-shadow: 0 0 8px #ffffff"
+        ></div>
+        中心波源 (Dipole Source)
+      </div>
+      <div class="legend-item">
+        <div class="color-box color-e"></div>
+        电场 (E) / 纵向振动
+      </div>
+      <div class="legend-item">
+        <div class="color-box color-b"></div>
+        磁场 (B) / 横向振动
+      </div>
+      <div class="legend-item">
+        <div
+          class="color-p"
+          style="background: #ff3366; box-shadow: 0 0 8px #ff3366"
+        ></div>
+        正电子 (+e) / 受力同向
+      </div>
+      <div class="legend-item">
+        <div
+          class="color-p"
+          style="background: #00a8ff; box-shadow: 0 0 8px #00a8ff"
+        ></div>
+        电子 (-e) / 受力反向
+      </div>
+      <div
+        id="time-display"
+        style="
+          margin-top: 15px;
+          font-family: monospace;
+          color: #aaa;
+          font-size: 14px;
+        "
+      >
+        t = 0.00 s
+      </div>
+    </div>
+
+    <div id="formula-panel" class="glass-panel">
+      <div class="panel-title">偶极子辐射公式 (Dipole)</div>
+      <div class="formula-block">
+        E = <span class="math-symbol">A/r</span> · cos(<span class="math-symbol"
+          >k</span
+        >r - <span class="math-symbol">ω</span>t)
+      </div>
+      <div class="formula-block" style="color: #ff00ff">
+        B = <span class="math-symbol">A/rc</span> · cos(<span
+          class="math-symbol"
+          >k</span
+        >r - <span class="math-symbol">ω</span>t)
+      </div>
+      <div class="math-text">
+        * 振幅随距离 <b>r</b> 呈 1/r 衰减。<br />
+        * 电场与磁场相位相同，且在空间中相互正交。
+      </div>
+      <div id="dynamic-formula">E = (4/r) * cos(3.0r - 2.0t)</div>
+      <div style="margin-top: 15px">
+        <label
+          ><input type="checkbox" id="toggle-formulas" checked />
+          显示场内公式面板</label
+        >
+      </div>
+    </div>
+
+    <div id="ui-panel" class="glass-panel">
+      <div class="control-group">
+        <button id="btn-play">Pause (暂停)</button>
+        <div style="display: flex; gap: 5px">
+          <button id="btn-source" class="active">源</button>
+          <button id="btn-e" class="active">E场</button>
+          <button id="btn-b" class="active">B场</button>
+        </div>
+      </div>
+      <hr
+        style="
+          border: 0;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          margin: 15px 0;
+        "
+      />
+      <div class="control-group">
+        <label>角频率 (ω) - 决定时间</label>
+        <input
+          type="range"
+          id="slider-omega"
+          min="0.5"
+          max="5.0"
+          step="0.1"
+          value="2.0"
+        />
+        <span class="value-display" id="val-omega">2.0</span>
+      </div>
+      <div class="control-group">
+        <label>波数 (k) - 决定波长</label>
+        <input
+          type="range"
+          id="slider-k"
+          min="1.0"
+          max="6.0"
+          step="0.1"
+          value="3.0"
+        />
+        <span class="value-display" id="val-k">3.0</span>
+      </div>
+      <hr
+        style="
+          border: 0;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          margin: 15px 0;
+        "
+      />
+      <div class="control-group" style="justify-content: space-between">
+        <button id="view-persp" class="active">透视</button>
+        <button id="view-top">顶视 (看磁场)</button>
+        <button id="view-front">正视 (看电场)</button>
+      </div>
+
+      <!-- 粒子控制区域 -->
+      <div
+        style="
+          margin-top: 15px;
+          font-size: 13px;
+          color: #bbb;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        "
+      >
+        <label>小球添加数量:</label>
+        <input
+          type="number"
+          id="particle-batch"
+          class="num-input"
+          value="10"
+          min="1"
+          max="50"
+        />
+        <label style="margin-left: 5px">大小:</label>
+        <input
+          type="range"
+          id="slider-psize"
+          min="0.2"
+          max="3.0"
+          step="0.1"
+          value="1.0"
+          style="width: 70px"
+        />
+      </div>
+
+      <div class="flex-row">
+        <button
+          id="btn-add-pos"
+          class="action-btn"
+          style="background: #cc2944; border-color: #ff3366"
+        >
+          + 随机正电子
+        </button>
+        <button
+          id="btn-add-neg"
+          class="action-btn"
+          style="background: #005a9e; border-color: #00a8ff"
+        >
+          + 随机电子
+        </button>
+      </div>
+
+      <div class="flex-row">
+        <button
+          id="btn-center-pos"
+          class="action-btn"
+          style="background: #881b2d; border-color: #ff3366"
+        >
+          + 中心正电子
+        </button>
+        <button
+          id="btn-center-neg"
+          class="action-btn"
+          style="background: #003c6a; border-color: #00a8ff"
+        >
+          + 中心电子
+        </button>
+      </div>
+
+      <button
+        id="btn-clear"
+        class="action-btn"
+        style="background: #444; border-color: #666; margin-top: 10px"
+      >
+        清空所有粒子
+      </button>
+
+      <div
+        style="
+          text-align: center;
+          margin-top: 12px;
+          font-size: 11px;
+          color: #888;
+        "
+        id="particle-counter"
+      >
+        正: 0 | 负: 0 (上限各500)
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      // --- 1. 场景初始化 ---
+      const container = document.getElementById("canvas-container");
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x050505, 0.02);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000,
+      );
+      camera.position.set(25, 18, 25);
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: "high-performance",
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      let time = 0;
+      let isPlaying = true;
+      let particleScale = 1.0;
+      const physics = { omega: 2.0, k: 3.0, amplitude: 4.0, maxRadius: 25 };
+
+      // --- 2. 场景装饰 ---
+      const gridHelper = new THREE.PolarGridHelper(
+        physics.maxRadius,
+        16,
+        8,
+        64,
+        0x444444,
+        0x111111,
+      );
+      gridHelper.position.y = -0.02;
+      scene.add(gridHelper);
+
+      // 还原波源 (Dipole Source)
+      const sourceMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4, 32, 32),
+        new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      );
+      scene.add(sourceMesh);
+
+      // --- 3. 波形系统 ---
+      const rayCount = 8;
+      const pointsPerRay = 250;
+      const eLines = [],
+        bLines = [];
+
+      const eMat = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        linewidth: 2,
+      });
+      const bMat = new THREE.LineBasicMaterial({
+        color: 0xff00ff,
+        linewidth: 2,
+      });
+
+      for (let i = 0; i < rayCount; i++) {
+        const eGeo = new THREE.BufferGeometry();
+        const bGeo = new THREE.BufferGeometry();
+        eGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(pointsPerRay * 3), 3),
+        );
+        bGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(pointsPerRay * 3), 3),
+        );
+
+        const eLine = new THREE.Line(eGeo, eMat);
+        const bLine = new THREE.Line(bGeo, bMat);
+        scene.add(eLine);
+        scene.add(bLine);
+        eLines.push(eLine);
+        bLines.push(bLine);
+      }
+
+      // --- 4. 粒子探测系统 (双轨 InstancedMesh) ---
+      const maxParticles = 500;
+      const posParticleData = [];
+      const negParticleData = [];
+
+      const pGeo = new THREE.SphereGeometry(0.3, 16, 16);
+
+      // 正电子网格 (红色)
+      const posMat = new THREE.MeshBasicMaterial({ color: 0xff3366 });
+      const posMesh = new THREE.InstancedMesh(pGeo, posMat, maxParticles);
+      posMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      posMesh.count = 0;
+      scene.add(posMesh);
+
+      // 电子网格 (蓝色)
+      const negMat = new THREE.MeshBasicMaterial({ color: 0x00a8ff });
+      const negMesh = new THREE.InstancedMesh(pGeo, negMat, maxParticles);
+      negMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      negMesh.count = 0;
+      scene.add(negMesh);
+
+      const dummy = new THREE.Object3D();
+
+      // 统一添加粒子逻辑 (随机位置)
+      function spawnParticles(type) {
+        const batchSize =
+          parseInt(document.getElementById("particle-batch").value) || 1;
+        const targetData = type === "pos" ? posParticleData : negParticleData;
+        const targetMesh = type === "pos" ? posMesh : negMesh;
+
+        for (let i = 0; i < batchSize; i++) {
+          if (targetData.length >= maxParticles) break;
+          // 随机散布半径
+          const r = 1.5 + Math.random() * (physics.maxRadius - 3);
+          const theta = Math.random() * Math.PI * 2;
+          targetData.push({
+            x: r * Math.cos(theta),
+            z: r * Math.sin(theta),
+            r: r,
+          });
+        }
+        targetMesh.count = targetData.length;
+        updateCounter();
+      }
+
+      // 统一添加中心粒子逻辑 (坐标绝对居中)
+      function spawnCenterParticle(type) {
+        const targetData = type === "pos" ? posParticleData : negParticleData;
+        const targetMesh = type === "pos" ? posMesh : negMesh;
+
+        if (targetData.length < maxParticles) {
+          targetData.push({ x: 0, z: 0, r: 0 });
+        }
+        targetMesh.count = targetData.length;
+        updateCounter();
+      }
+
+      function updateCounter() {
+        document.getElementById("particle-counter").innerText =
+          `正: ${posParticleData.length} | 负: ${negParticleData.length} (上限各500)`;
+      }
+
+      // 绑定粒子按钮事件
+      document
+        .getElementById("btn-add-pos")
+        .addEventListener("click", () => spawnParticles("pos"));
+      document
+        .getElementById("btn-add-neg")
+        .addEventListener("click", () => spawnParticles("neg"));
+      document
+        .getElementById("btn-center-pos")
+        .addEventListener("click", () => spawnCenterParticle("pos"));
+      document
+        .getElementById("btn-center-neg")
+        .addEventListener("click", () => spawnCenterParticle("neg"));
+
+      document.getElementById("slider-psize").addEventListener("input", (e) => {
+        particleScale = parseFloat(e.target.value);
+      });
+
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        posParticleData.length = 0;
+        negParticleData.length = 0;
+        posMesh.count = 0;
+        negMesh.count = 0;
+        updateCounter();
+      });
+
+      // --- 5. 核心渲染与更新 ---
+      const clock = new THREE.Clock();
+
+      function updatePhysics() {
+        if (!isPlaying) return;
+        time += clock.getDelta();
+        document.getElementById("time-display").innerText =
+          `t = ${time.toFixed(2)} s`;
+
+        const { omega, k, amplitude, maxRadius } = physics;
+        const currentPhase = omega * time;
+
+        // 1. 更新电磁波射线
+        for (let i = 0; i < rayCount; i++) {
+          const angle = i * (Math.PI / 4);
+          const dirX = Math.cos(angle),
+            dirZ = Math.sin(angle);
+          const perpX = -Math.sin(angle),
+            perpZ = Math.cos(angle);
+
+          const ePos = eLines[i].geometry.attributes.position.array;
+          const bPos = bLines[i].geometry.attributes.position.array;
+
+          for (let j = 0; j < pointsPerRay; j++) {
+            const r = (j / pointsPerRay) * maxRadius;
+            const wave =
+              (amplitude / (r + 0.5)) * Math.cos(k * r - currentPhase);
+            const idx = j * 3;
+
+            ePos[idx] = dirX * r;
+            ePos[idx + 1] = wave;
+            ePos[idx + 2] = dirZ * r;
+            bPos[idx] = dirX * r + perpX * wave;
+            bPos[idx + 1] = 0;
+            bPos[idx + 2] = dirZ * r + perpZ * wave;
+          }
+          eLines[i].geometry.attributes.position.needsUpdate = true;
+          bLines[i].geometry.attributes.position.needsUpdate = true;
+        }
+
+        // 2. 更新正电子 (+e)
+        for (let i = 0; i < posParticleData.length; i++) {
+          const p = posParticleData[i];
+          const localE =
+            (amplitude / (p.r + 0.5)) * Math.cos(k * p.r - currentPhase);
+          dummy.position.set(p.x, localE, p.z);
+          dummy.scale.set(particleScale, particleScale, particleScale);
+          dummy.updateMatrix();
+          posMesh.setMatrixAt(i, dummy.matrix);
+        }
+        if (posParticleData.length > 0)
+          posMesh.instanceMatrix.needsUpdate = true;
+
+        // 3. 更新电子 (-e)
+        for (let i = 0; i < negParticleData.length; i++) {
+          const p = negParticleData[i];
+          const localE =
+            (amplitude / (p.r + 0.5)) * Math.cos(k * p.r - currentPhase);
+          dummy.position.set(p.x, -localE, p.z);
+          dummy.scale.set(particleScale, particleScale, particleScale);
+          dummy.updateMatrix();
+          negMesh.setMatrixAt(i, dummy.matrix);
+        }
+        if (negParticleData.length > 0)
+          negMesh.instanceMatrix.needsUpdate = true;
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        updatePhysics();
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      // --- 6. 基础交互绑定 ---
+      const updateDynamicFormula = () => {
+        document.getElementById("dynamic-formula").innerText =
+          `E = (4/r) * cos(${physics.k.toFixed(1)}r - ${physics.omega.toFixed(1)}t)`;
+      };
+
+      ["omega", "k"].forEach((param) => {
+        document
+          .getElementById(`slider-${param}`)
+          .addEventListener("input", (e) => {
+            physics[param] = parseFloat(e.target.value);
+            document.getElementById(`val-${param}`).innerText =
+              physics[param].toFixed(1);
+            updateDynamicFormula();
+          });
+      });
+
+      document.getElementById("btn-play").addEventListener("click", (e) => {
+        isPlaying = !isPlaying;
+        e.target.innerText = isPlaying ? "Pause (暂停)" : "Play (播放)";
+        e.target.classList.toggle("active", isPlaying);
+        if (isPlaying) clock.getDelta();
+      });
+
+      // 波源、E场、B场 显隐切换
+      document.getElementById("btn-source").addEventListener("click", (e) => {
+        const isActive = e.target.classList.toggle("active");
+        sourceMesh.visible = isActive;
+      });
+
+      ["e", "b"].forEach((type) => {
+        document
+          .getElementById(`btn-${type}`)
+          .addEventListener("click", (e) => {
+            const isActive = e.target.classList.toggle("active");
+            const arr = type === "e" ? eLines : bLines;
+            arr.forEach((line) => (line.visible = isActive));
+          });
+      });
+
+      const views = {
+        "view-persp": [25, 18, 25],
+        "view-top": [0, 35, 0.01],
+        "view-front": [0, 0, 35],
+      };
+      for (const [id, pos] of Object.entries(views)) {
+        document.getElementById(id).addEventListener("click", (e) => {
+          Object.keys(views).forEach((btn) =>
+            document.getElementById(btn).classList.remove("active"),
+          );
+          e.target.classList.add("active");
+          camera.position.set(...pos);
+          controls.target.set(0, 0, 0);
+        });
+      }
+
+      document
+        .getElementById("toggle-formulas")
+        .addEventListener("change", (e) => {
+          const display = e.target.checked ? "block" : "none";
+          Array.from(document.getElementById("formula-panel").children).forEach(
+            (child) => {
+              if (child.tagName !== "DIV" || !child.querySelector("input")) {
+                child.style.display = display;
+              }
+            },
+          );
+        });
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      clock.start();
+      animate();
+    </script>
+  </body>
+</html>
